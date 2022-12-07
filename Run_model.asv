@@ -22,16 +22,18 @@ B_bar_d = [0.1;
 [n_states,n_int] = size(B_bar_d);
 
 n_meas = 6;
-% C_temp = (1/sqrt(n_states))*randn(n_meas,n_states);
-% C_obsv_d = zeros(n_meas,n_states);
-% for C_col = 1:n_states
-%     C_obsv_d(:,C_col) = C_temp(:,C_col)/norm(C_temp(:,C_col));
-% end
-% save C_obsv_d.mat C_obsv_d
-load('C_obsv_d.mat');
+C_temp = (1/sqrt(n_states))*randn(n_meas,n_states);
+C_obsv_d = zeros(n_meas,n_states);
+for C_col = 1:n_states
+    C(:,C_col) = C_temp(:,C_col)/norm(C_temp(:,C_col));
+end
 
 
 D_obsv_d = zeros(n_meas,n_int);
+
+% critical measurement matrix
+Cm = ones(1,n_states);
+n_critical = size(Cm,1);
 
 
 %% 2. Check observability and controllabiltiy
