@@ -29,7 +29,7 @@ D_obsv_d = zeros(n_meas,n_int);
 % some horizon params
 x0 = [7;7];
 T = 5;
-N = (n_int+1)*T;
+N = 3*(n_int+1)*T;
 
 
 %% 2. runing parameters

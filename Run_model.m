@@ -77,9 +77,9 @@ T_start_opt(:)    = 1.5*T*T_sample;   % start state estimation at
 T_stop_attack = T_final;        % stop injecting attack at 10s
 
 %% 7. inputs trajectory
-u = -10 + 20*rand(N_samples,1);
-u_time = [linspace(0,T_final,N_samples).', u];
-
+% u = -10 + 20*rand(N_samples,1);
+% u_time = [linspace(0,T_final,N_samples).', u];
+load u_time.mat
 
 % %% 8. Attack Parameters
 T_start_attack = .2*T_final;  % Time to begin attack. Neede to sshow system responses with/without attacks in the same simulation
@@ -100,9 +100,11 @@ HL_u = Get_Hanker(u_traj,T);
 HL_y = Get_Hanker(y_traj,T);
 
 % selection matrix
-n_select = 2*n_states;
+% n_select = 2*n_states;
 % E_idx = randperm(n_meas,n_select);
 load('selection_index.mat');
+% E_idx = [1,2,3,4,5,6];
+n_select = length(E_idx);
 E = zeros(n_select,n_meas);
 for iter = 1:n_select
     E(iter,E_idx(iter)) = 1;
@@ -124,10 +126,8 @@ H = [zeros(size(HL_u,1),T*n_states), HL_u;
        CE_MH, zeros(size(E_MH,1),n_alpha)];
 H_pinv = pinv(H,0.001);
 
-% %% 11. Data-driven L1 MHE
-% A_in1 = [zeros(size(HL_u,1),T*n_states), HL_u;
-%        zeros(size(HL_y,1),T*n_states), HL_y;
-%        CE_MH, zeros(size(E_MH,1),n_alpha)];
-% A_in2 = [zeros(size(HL_u,1),n_meas*T);
-%          eye(n_meas*T);
-%           E_MH];
+%% L1 MHE
+A_in1 = H;
+A_in2 = [zeros(size(HL_u,1),n_meas*T);
+         eye(n_meas*T);
+         E_MH];
