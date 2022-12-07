@@ -72,7 +72,6 @@ U0          = zeros(n_int,T+1);
 %% 6. runing parameters
 N_samples      = 800;                % The total number of samples to run
 T_final        = N_samples*T_sample;  % Total time for simulation (20s)
-T_start_attack = 0.1*T_final;         % start injecting attack at 10s
 T_start_opt(:)    = 1.5*T*T_sample;   % start state estimation at 
 T_stop_attack = T_final;        % stop injecting attack at 10s
 
@@ -81,11 +80,11 @@ T_stop_attack = T_final;        % stop injecting attack at 10s
 % u_time = [linspace(0,T_final,N_samples).', u];
 load u_time.mat
 
-% %% 8. Attack Parameters
-T_start_attack = .2*T_final;  % Time to begin attack. Neede to sshow system responses with/without attacks in the same simulation
+%% 8. Attack Parameters
+T_start_attack = .05*T_final;  % Time to begin attack. Neede to sshow system responses with/without attacks in the same simulation
 n_attack =  round(0.2*n_meas);
 BDD_thresh = 5;  % Bad data detection tolerance
-I = randperm(n_meas,n_attack);
+I = sort(randperm(n_meas,n_attack));
 indicator = zeros(n_meas,1);
 indicator(I) = 1;
 
