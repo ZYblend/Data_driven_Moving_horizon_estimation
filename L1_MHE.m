@@ -1,4 +1,4 @@
-function [x_hat,r] = L1_MHE(y,u,T,H0,H1,F,A,n_states)
+function [x_hat] = L1_MHE(y,u,T,H0,H1,F,A,n_states)
 
 n_meas_T = size(y,1);
 
@@ -14,4 +14,3 @@ z = linprog(c,A_in,b_in);
 x_hat0 = z(1:n_states);
 
 x_hat = mpower(A,T)*x_hat0 + F*u;
-r = y - H0*x_hat0 - H1*u;

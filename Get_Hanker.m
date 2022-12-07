@@ -1,4 +1,8 @@
 function [H] = Get_Hanker(u,L)
+% Calculate Hanker matrix
+%
+% Yu Zheng, FSU
+% 12/05/2022
 
 [N,m] = size(u);
 H = zeros(m*L,N-L+1);
