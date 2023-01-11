@@ -72,6 +72,7 @@ U0          = zeros(n_int,T+1);
 %% 6. runing parameters
 N_samples      = 800;                % The total number of samples to run
 T_final        = N_samples*T_sample;  % Total time for simulation (20s)
+T_start_attack = 0.1*T_final;         % start injecting attack at 10s
 T_start_opt(:)    = 1.5*T*T_sample;   % start state estimation at 
 T_stop_attack = T_final;        % stop injecting attack at 10s
 
@@ -80,11 +81,11 @@ T_stop_attack = T_final;        % stop injecting attack at 10s
 % u_time = [linspace(0,T_final,N_samples).', u];
 load u_time.mat
 
-%% 8. Attack Parameters
-T_start_attack = .05*T_final;  % Time to begin attack. Neede to sshow system responses with/without attacks in the same simulation
+% %% 8. Attack Parameters
+T_start_attack = .2*T_final;  % Time to begin attack. Neede to sshow system responses with/without attacks in the same simulation
 n_attack =  round(0.2*n_meas);
 BDD_thresh = 5;  % Bad data detection tolerance
-I = sort(randperm(n_meas,n_attack));
+I = randperm(n_meas,n_attack);
 indicator = zeros(n_meas,1);
 indicator(I) = 1;
 
@@ -94,6 +95,20 @@ indicator(I) = 1;
 traj = load('traj.mat');
 u_traj = traj.u_traj;
 y_traj = traj.y_traj;
+
+% check if the system is output reachable
+M = zeros(n_meas,(T+1)*n_int);
+M (:,1:n_int) = D_obsv_d;
+for idx_markov = 1:T
+    M(:,n_int*(idx_markov)+1:n_int*(idx_markov+1)) = C_obsv_d*mpower(A_bar_d,idx_markov-1)*B_bar_d;
+end
+disp('rank of Markov matrix')
+disp(rank(M))
+if rank(M)==size(M,1)
+    disp('the system is output reachable')
+else
+    disp('the system is not output reachable')
+end
 
 HL_u = Get_Hanker(u_traj,T);
 HL_y = Get_Hanker(y_traj,T);

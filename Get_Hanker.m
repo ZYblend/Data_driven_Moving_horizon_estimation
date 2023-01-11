@@ -16,6 +16,8 @@ end
 if rank(H) == m*L
     disp("persistently exciting!");
 else
+    disp("Not persistenly exciting...");
+    disp("The rank of hanker matrix is:");
     disp(num2str(rank(H)));
 end
 
