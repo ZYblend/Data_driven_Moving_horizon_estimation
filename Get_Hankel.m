@@ -1,4 +1,4 @@
-function [H] = Get_Hanker(u,L)
+function [H] = Get_Hankel(u,L)
 % Calculate Hanker matrix
 %
 % Yu Zheng, FSU
