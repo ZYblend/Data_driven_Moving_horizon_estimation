@@ -41,7 +41,8 @@ disp(rank(obsv(A,C))) % fully observable
 L = 5;                                % horizon
 x0          = 7*ones(n_states,1);
 x0_hat      = [1; 2];
-X0_hat      = kron(ones(L,1),x0_hat);
+X0_hat      = zeros(L*n_states,1);
+X0_hat(1:n_states) = x0_hat;
 
 % Delay tape initialization
 X0          = zeros(n_states,L);
@@ -89,73 +90,9 @@ u_time_sim = [linspace(0,T_final,tot_samples).', u_sim];
 %% Full information estimation
 
 %% 6. data-driven MHE
-rho = 0.95;
-P = 10;
-R = 1;
+rho = 1;
+P = 1;
+R = 100;
 
 [H,f,Aeq,A_ineq,b_ineq] = Get_MHE_Param(P,R,rho,L,n_states,n_meas,u_d,x_d,y_d);
-
-% n_alpha = size(HL_u,2);
-% 
-% % Error on y
-% Aeq = [HL_u zeros(size(HL_u,1),n_states*L) zeros(size(HL_u,1),n_meas*L);
-%        HL_y zeros(size(HL_y,1),n_states*L) eye(n_meas*L);
-%        HL_x -eye(n_states*L) zeros(n_states*L,n_meas*L)];
-% 
-% H1 = zeros(1,n_alpha+n_states*L + n_meas*L);
-% 
-% H21 = [zeros(n_states,n_alpha) (sqrt(rho)^L)*sqrt(P)*eye(n_states) zeros(n_states,n_states*(L-1)) zeros(n_states,n_meas*L)];
-% H22 = zeros(n_states*(L-1),n_alpha+n_states*L+ n_meas*L);
-% H2 = [H21; H22];
-% 
-% rho_forget = zeros(n_meas*L);
-% for idx = 1:L
-%     rho_forget(n_meas*(idx-1)+1:n_meas*idx,n_meas*(idx-1)+1:n_meas*idx) = sqrt(rho)^(L+1-idx)*eye(n_meas);
-% end
-% H3 = [zeros(n_meas*L,n_alpha+n_states*L) rho_forget*sqrt(R)];
-% 
-% H = [H1;
-%      H2;
-%      H3];
-% 
-% f = [zeros(1,n_states);
-%      eye(n_states);
-%      zeros(n_states*(L-1),n_states);
-%      zeros(n_meas*L,n_states)];
-% 
-% A_ineq = -[zeros(1,n_alpha) zeros(1,n_states*L) zeros(1,n_meas*L);
-%           zeros(n_states*L,n_alpha) eye(n_states*L) zeros(n_states*L,n_meas*L);
-%           zeros(n_meas*L,n_alpha) zeros(n_meas*L,n_states*L) zeros(n_meas*L)];
-% b_ineq = zeros(1+n_states*L+n_meas*L,1);
-
-% % Error on x
-% Aeq = [HL_u zeros(size(HL_u,1),n_states*L) zeros(size(HL_u,1),n_states*L);
-%        HL_y zeros(size(HL_y,1),n_states*L) zeros(n_meas*L,n_states*L);
-%        HL_x -eye(n_states*L) eye(n_states*L)];
-% 
-% H1 = zeros(1,n_alpha+n_states*L + n_states*L);
-% 
-% H21 = [zeros(n_states,n_alpha) (rho^L)*sqrt(P)*eye(n_states) zeros(n_states,n_states*(L-1)) zeros(n_states,n_states*L)];
-% H22 = zeros(n_states*(L-1),n_alpha+n_states*L+ n_states*L);
-% H2 = [H21; H22];
-% 
-% rho_forget = zeros(n_states*L);
-% for idx = 1:L
-%     rho_forget(n_states*(idx-1)+1:n_states*idx,n_states*(idx-1)+1:n_states*idx) = rho^(L+1-idx)*eye(n_states);
-% end
-% H3 = [zeros(n_states*L,n_alpha+n_states*L) rho_forget*sqrt(R)];
-% 
-% H = [H1;
-%      H2;
-%      H3];
-% 
-% f = [zeros(1,n_states);
-%      eye(n_states);
-%      zeros(n_states*(L-1),n_states);
-%      zeros(n_states*L,n_states)];
-% 
-% A_ineq = -[zeros(1,n_alpha) zeros(1,n_states*L) zeros(1,n_states*L);
-%           zeros(n_states*L,n_alpha) eye(n_states*L) zeros(n_states*L,n_states*L);
-%           zeros(n_states*L,n_alpha) zeros(n_states*L,n_states*L) zeros(n_states*L)];
-% b_ineq = zeros(1+n_states*L+n_states*L,1);
 
