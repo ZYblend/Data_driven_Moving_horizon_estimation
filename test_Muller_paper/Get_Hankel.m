@@ -1,6 +1,9 @@
 function [H] = Get_Hankel(u,L)
 % Calculate Hanker matrix
 %
+% Inputs:
+%        u: [N-by-m] data trajectory (N data, data dimention is m)
+%
 % Yu Zheng, FSU
 % 12/05/2022
 
@@ -13,12 +16,14 @@ for col = 1:N-L+1
 end
 
 %% check if it is persistently exciting
-if rank(H) == m*L
+if rank(H) == size(H,1)
     disp("persistently exciting!");
 else
     disp("Not persistenly exciting...");
-    disp("The rank of hanker matrix is:");
+    disp("The rank of Hankel matrix is:");
     disp(num2str(rank(H)));
+    disp("The size of Hankel matrix is:");
+    disp(num2str(size(H)));
 end
 
 
