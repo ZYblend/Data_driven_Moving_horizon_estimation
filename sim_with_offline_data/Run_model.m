@@ -2,8 +2,8 @@
 %
 % Yu Zheng, RASLab, FAMU-FSU College of Engineering, Tallahassee, 2021, Aug.
 
-clear all
-clc
+% clear all
+% clc
 
 %% 1. load system matrices
 T_sample = 0.01;   % sample time step
@@ -112,8 +112,8 @@ R = 10;
 %% 7. Attack Parameters
 T_start_attack = .1*T_final;  % Time to begin attack. Neede to sshow system responses with/without attacks in the same simulation
 T_stop_attack = T_final;             % stop injecting attack at 8s
-n_attack =  round(0.2*n_meas);
-I = randperm(n_meas,n_attack);
+% n_attack =  round(0.2*n_meas);
+% I = randperm(n_meas,n_attack);
 indicator = zeros(n_meas,1);
 indicator(I) = 1;
 

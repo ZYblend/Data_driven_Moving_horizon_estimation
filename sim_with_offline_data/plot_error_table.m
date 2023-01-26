@@ -80,15 +80,14 @@ metric_max = @(x,dim) max(abs(x),[],dim);
 
 T_sample = 0.01;
 
-%% number of attacks = 0
 tot_attacks = 3;
 rms_metric = zeros(4,tot_attacks+1);
 max_metric = zeros(4,tot_attacks+1);
-num_cases = [1,6,15, 20];
+num_cases = [1,6,15,20];
 
 for n_attack = 0:tot_attacks
     for idx = 1:num_cases(n_attack+1)
-        filename = "Results/Data_"+num2str(idx)+"_attacks.mat";
+        filename = "results/Data_"+num2str(n_attack)+"_attacks_"+num2str(idx)+".mat";
         x = load(filename).x;
         x_hat_DDL2 = load(filename).x_hat_DDL2;
         x_hat_DDL1 = load(filename).x_hat_DDL1;
@@ -105,12 +104,12 @@ for n_attack = 0:tot_attacks
         rms_metric(2,n_attack+1) = rms_metric(2,n_attack+1) + metric_rms(e_DDL2,1);
         rms_metric(4,n_attack+1) = rms_metric(4,n_attack+1) + metric_rms(e_DDL1,1);
         rms_metric(1,n_attack+1) = rms_metric(1,n_attack+1) + metric_rms(e_MDL2,1);
-        rms_metric(3,n_attack+1) = rms_metric(1,n_attack+1) + metric_rms(e_MDL1,1);
+        rms_metric(3,n_attack+1) = rms_metric(3,n_attack+1) + metric_rms(e_MDL1,1);
         
         max_metric(2,n_attack+1) = max(max_metric(2,n_attack+1), metric_max(e_DDL2,1));
         max_metric(4,n_attack+1) = max(max_metric(4,n_attack+1), metric_max(e_DDL1,1));
-        max_metric(1,n_attack+1) = max(max_metric(4,n_attack+1), metric_max(e_MDL2,1));
-        max_metric(3,n_attack+1) = max(max_metric(4,n_attack+1), metric_max(e_MDL1,1));
+        max_metric(1,n_attack+1) = max(max_metric(1,n_attack+1), metric_max(e_MDL2,1));
+        max_metric(3,n_attack+1) = max(max_metric(3,n_attack+1), metric_max(e_MDL1,1));
     end
     rms_metric(:,n_attack+1) = rms_metric(:,n_attack+1)/num_cases(n_attack+1);
 end
