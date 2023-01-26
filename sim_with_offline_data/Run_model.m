@@ -30,7 +30,7 @@ B = [0.1; 0.1];
 
 n_meas = 6;
 % C = rand(n_meas,n_states);
-C = load('C.mat');
+C = load('C.mat').C;
 D = zeros(n_meas,n_int);
 
 
@@ -53,6 +53,7 @@ X0_hat(1:n_states) = x0_hat;
 X0          = zeros(n_states,L);
 Y0          = zeros(n_meas,L);
 U0          = zeros(n_int,L);
+U0_MD       = zeros(n_int,L+1);
 
 
 %% 4. runing parameters
@@ -94,7 +95,6 @@ HL_x*alpha - x_test(:)
 u_sim = 10*rand(tot_samples,n_int);
 u_time_sim = [linspace(0,T_final,tot_samples).', u_sim];
 
-%% Full information estimation
 
 %% 6. data-driven MHE
 n_alpha = size(HL_u,2);
@@ -102,12 +102,12 @@ z_hat0 = zeros(n_alpha+n_states*L + n_meas*L,1);
 % L2
 rho = 1;
 P = 1;
-R = 100;
+R = 10;
 
-[H,f,Aeq,A_ineq,b_ineq] = Get_MHE_Param(P,R,rho,L,n_states,n_meas,u_d,x_d,y_d);
+[H_DDL2,f_DDL2,Aeq_DDL2,A_ineq_DDL2,b_ineq_DDL2] = Get_DDL2_MHE_Param(P,R,rho,L,n_states,n_meas,u_d,x_d,y_d);
 
 % L1
-[H_L1,H_L2,f2,Aeq2,A_ineq2,b_ineq2] = Get_L1MHE_Param(P,R,rho,L,n_states,n_meas,u_d,x_d,y_d);
+[H_L1_DDL1,H_L2_DDL1,f_DDL1,Aeq_DDL1,A_ineq_DDL1,b_ineq_DDL1] = Get_DDL1_MHE_Param(P,R,rho,L,n_states,n_meas,u_d,x_d,y_d);
 
 %% 7. Attack Parameters
 T_start_attack = .1*T_final;  % Time to begin attack. Neede to sshow system responses with/without attacks in the same simulation
@@ -117,5 +117,9 @@ I = randperm(n_meas,n_attack);
 indicator = zeros(n_meas,1);
 indicator(I) = 1;
 
+%% 8. Model based estimators
+% L2
+[H_MDL2,f_MDL2,Aeq_MDL2,H1_MDL2,F_MDL2] = Get_MDL2_MHE_Param(P,R,rho,L,n_states,n_meas,A,B,C);
 
-
+% L1 
+[H_L1_MDL1,H_L2_MDL1,f_MDL1,Aeq_MDL1,H1_MDL1,F_MDL1] = Get_MDL1_MHE_Param(P,R,rho,L,n_states,n_meas,A,B,C);

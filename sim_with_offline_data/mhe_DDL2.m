@@ -1,4 +1,4 @@
-function x_full = mhe(x_old,beq,Aeq,A,b,H,f,n_states,n_meas,L)
+function x_full = mhe_DDL2(x_old,beq,Aeq,H,f,n_states,n_meas,L)
 
 x_old_hat = x_old(n_states+1:2*n_states,:);
 

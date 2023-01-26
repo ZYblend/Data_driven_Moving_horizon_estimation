@@ -1,4 +1,4 @@
-function [H,f,Aeq,A_ineq,b_ineq] = Get_MHE_Param(P,R,rho,L,n_states,n_meas,ud,xd,yd)
+function [H_L1,H_L2,f,Aeq,A_ineq,b_ineq] = Get_DDL1_MHE_Param(P,R,rho,L,n_states,n_meas,ud,xd,yd)
 %% This function is to get the vectorized parameter for MHE and FIE program
 % Inputs:
 %        - P,R: weights for terminal cost and stage cost respectively
@@ -31,20 +31,24 @@ H21 = [zeros(n_states,n_alpha) (sqrt(rho)^L)*sqrt(P)*eye(n_states) zeros(n_state
 H22 = zeros(n_states*(L-1),n_alpha+n_states*L+ n_meas*L);
 H2 = [H21; H22];
 
-rho_forget = zeros(n_meas*L);
-for idx = 1:L
-    rho_forget(n_meas*(idx-1)+1:n_meas*idx,n_meas*(idx-1)+1:n_meas*idx) = sqrt(rho)^(L+1-idx)*eye(n_meas);
-end
-H3 = [zeros(n_meas*L,n_alpha+n_states*L) rho_forget*sqrt(R)];
+H3 = zeros(n_meas*L,n_alpha+n_states*L+ n_meas*L);
 
-H = [H1;
-     H2;
-     H3];
+H_L2 = [H1;
+       H2;
+        H3];
 
 f = [zeros(1,n_states);
      eye(n_states);
      zeros(n_states*(L-1),n_states);
      zeros(n_meas*L,n_states)];
+
+rho_forget = zeros(n_meas*L);
+for idx = 1:L
+    rho_forget(n_meas*(idx-1)+1:n_meas*idx,n_meas*(idx-1)+1:n_meas*idx) = sqrt(rho)^(L+1-idx)*eye(n_meas);
+end
+
+e_select = sqrt(R)*[zeros(n_meas*L,n_alpha) zeros(n_meas*L,n_states*L) eye(n_meas*L)];
+H_L1 = rho_forget*e_select;
 
 %% Get constraint parameters
 Aeq = [HL_u zeros(size(HL_u,1),n_states*L) zeros(size(HL_u,1),n_meas*L);

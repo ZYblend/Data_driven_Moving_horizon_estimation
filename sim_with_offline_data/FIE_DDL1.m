@@ -1,4 +1,4 @@
- function x_full = FIE_L1(x0_old,ud,xd,yd,P,R,rho,L,n_states,n_meas,t_sample,u,y)
+ function x_full = FIE_DDL1(x0_old,ud,xd,yd,P,R,rho,L,n_states,n_meas,t_sample,u,y)
 
 
 %% Unpacking inputs
@@ -7,7 +7,7 @@
 % yd = zd{1,3};
 
 %% Get parameters
-[H_L1,H_L2,f2,Aeq2,~,~] = Get_L1MHE_Param(P,R,rho,t_sample,n_states,n_meas,ud,xd,yd);
+[H_L1,H_L2,f2,Aeq2,~,~] = Get_DDL1_MHE_Param(P,R,rho,t_sample,n_states,n_meas,ud,xd,yd);
 
 %% call quadratic programming solver
 beq = [u;y;zeros(n_states*t_sample,1)];
