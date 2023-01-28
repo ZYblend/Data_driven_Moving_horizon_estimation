@@ -7,6 +7,7 @@
 % 12/13/2022
 
 %% run all sims
+% comment line 5,6 in Run_model.m: clc; clear all;
 % comment line 115, 116 in Run_model.m: 115 n_attack =  round(0.2*n_meas); 
 %                                       116 I = randperm(n_meas,n_attack);
 % 1. no attack

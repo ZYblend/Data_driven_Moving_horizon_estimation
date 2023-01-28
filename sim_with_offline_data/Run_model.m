@@ -116,6 +116,9 @@ T_stop_attack = T_final;             % stop injecting attack at 8s
 % I = randperm(n_meas,n_attack);
 indicator = zeros(n_meas,1);
 indicator(I) = 1;
+attack_mag = load("attack_mag").attack_mag;
+attacks = [linspace(0,T_final,tot_samples); attack_mag.*indicator].';
+% attacks = [linspace(0,T_final,tot_samples); (-50+100*rand(n_meas,tot_samples)).*indicator].';
 
 %% 8. Model based estimators
 % L2
