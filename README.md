@@ -93,6 +93,8 @@ python -m quadrotor.prepare_offline
 python -m quadrotor.simulate_quadrotor
 ```
 
+The script opens the safe-control-gym PyBullet window at the start. The figure-8 faces the camera. Drag to orbit, scroll to zoom, and Ctrl+drag to pan. The orange vehicle is Robust DD-MHE and the green vehicle is Resilient DD-MHE; both move while the estimators are solving, not as a replay afterward. The blue beads are the figure-8 and the red bead is the current reference point. The plots are written when the estimators finish; close the window after that. `--no-gui` skips the window. It needs the packages in `requirements-gym.txt` and the safe-control-gym submodule.
+
 After the bias, Robust DD-MHE leaves the figure-8 in `x` (RMSE `0.360 m`). Resilient DD-MHE stays on the reference (`0.009 m`). Altitude tracking stays near `6 mm` for both. The animation below is that pair of flights. The label switches to "gyro bias on" at `t = 4 s`.
 
 ![Figure-8 flight comparison](quadrotor/quadrotor_figure8.gif)

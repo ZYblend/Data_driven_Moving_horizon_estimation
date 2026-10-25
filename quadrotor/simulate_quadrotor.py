@@ -9,9 +9,11 @@ root, after ``python -m quadrotor.prepare_offline``:
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -25,39 +27,55 @@ from ddmhe import load_hankel, make_dd_mhe_pair  # noqa: E402
 from quadrotor import trajectory as traj  # noqa: E402
 
 
-def fly_with_estimator(n_steps, gain, estimate, seed):
-    """Close the linear plant around one estimator on the figure-8."""
-    rng = np.random.default_rng(seed)
-    x = np.zeros((n_steps, traj.N_STATE))
-    x_hat_log = np.zeros((n_steps, traj.N_STATE))
-    u_hist, y_hist = [], []
-    latest = {}
-    x_hat = np.zeros(traj.N_STATE)
-    prior0 = np.zeros(traj.N_STATE)
-    for t in range(n_steps):
+class _Flight:
+    """One closed-loop figure-8. ``step`` advances a single sample."""
+
+    def __init__(self, n_steps, gain, estimate, seed):
+        self.n_steps = n_steps
+        self.gain = gain
+        self.estimate = estimate
+        self.rng = np.random.default_rng(seed)
+        self.x = np.zeros((n_steps, traj.N_STATE))
+        self.x_hat_log = np.zeros((n_steps, traj.N_STATE))
+        self.u_hist, self.y_hist = [], []
+        self.latest = {}
+        self.x_hat = np.zeros(traj.N_STATE)
+        self.prior0 = np.zeros(traj.N_STATE)
+        self.t = 0
+
+    def step(self):
+        t = self.t
         ref = traj.reference(t)
         u_dev = np.clip(
-            -gain @ (x_hat - ref) + traj.figure8_feedforward(t),
+            -self.gain @ (self.x_hat - ref) + traj.figure8_feedforward(t),
             -traj.U_LIMIT,
             traj.U_LIMIT,
         )
-        y = traj.output_scaled(x[t], u_dev)
-        y = y + rng.normal(0.0, traj.NOISE_STD, size=traj.N_MEAS)
+        y = traj.output_scaled(self.x[t], u_dev)
+        y = y + self.rng.normal(0.0, traj.NOISE_STD, size=traj.N_MEAS)
         if t >= traj.ATTACK_INDEX:
             y[3] += traj.ATTACKS["gyro"][1] / traj.SCALE[3]
-        u_hist.append(u_dev.copy())
-        y_hist.append(y)
-        x_hat = _window_estimate(estimate, u_hist, y_hist, latest, prior0)
-        x_hat_log[t] = x_hat
-        if t + 1 < n_steps:
-            x[t + 1] = traj.A @ x[t] + traj.B @ u_dev
+        self.u_hist.append(u_dev.copy())
+        self.y_hist.append(y)
+        self.x_hat = _window_estimate(self.estimate, self.u_hist, self.y_hist, self.latest, self.prior0)
+        self.x_hat_log[t] = self.x_hat
+        if t + 1 < self.n_steps:
+            self.x[t + 1] = traj.A @ self.x[t] + traj.B @ u_dev
+        self.t = t + 1
+
+
+def fly_with_estimator(n_steps, gain, estimate, seed):
+    """Close the linear plant around one estimator on the figure-8."""
+    flight = _Flight(n_steps, gain, estimate, seed)
+    for t in range(n_steps):
+        flight.step()
         if t % 100 == 0:
             print(
-                f"  t={t * traj.TS:.1f}s x={x[t, 0]:+.3f} z={x[t, 2]:+.3f} "
-                f"pitch={np.degrees(x[t, 4]):+.1f}",
+                f"  t={t * traj.TS:.1f}s x={flight.x[t, 0]:+.3f} z={flight.x[t, 2]:+.3f} "
+                f"pitch={np.degrees(flight.x[t, 4]):+.1f}",
                 flush=True,
             )
-    return x, x_hat_log
+    return flight.x, flight.x_hat_log
 
 
 def _window_estimate(estimate, u_hist, y_hist, latest, prior0):
@@ -274,7 +292,7 @@ def save_figure8_gif(path, flights, stride=4):
     os.replace(temporary, path)
 
 
-def figure8_flights():
+def figure8_flights(show_gui=True):
     _u, _y, _x, hu, hy, hx, meta = load_hankel(traj.OFFLINE_PATH)
     horizon = int(meta["horizon"])
     if horizon != traj.L:
@@ -304,19 +322,71 @@ def figure8_flights():
         "results": {},
         "estimates": {},
     }
-    for name, solver in solvers.items():
-        print(f"--- {name} ---", flush=True)
+    runners = [(name, _Flight(traj.N_STEPS, gain, solver.estimate, seed=2)) for name, solver in solvers.items()]
+    view = None
+    if show_gui:
+        from quadrotor.gym_view import RESILIENT, ROBUST, LiveView
+
+        reference = np.vstack([traj.reference(t) for t in range(traj.N_STEPS)])
+        view = LiveView(traj.TS, reference)
+
+    def run_estimators():
         started = time.time()
-        x, x_hat = fly_with_estimator(traj.N_STEPS, gain, solver.estimate, seed=2)
-        metrics = tracking_metrics(x)
-        estimates = estimate_metrics(x, x_hat)
-        flights[name] = {"x": x, "x_hat": x_hat, "reference": metrics.pop("reference")}
+        try:
+            for t in range(traj.N_STEPS):
+                states = {}
+                for name, flight in runners:
+                    flight.step()
+                    states[name] = flight.x[t]
+                if view is not None:
+                    view.push(states[ROBUST], states[RESILIENT], traj.reference(t))
+                if t % 100 == 0:
+                    print(
+                        f"  t={t * traj.TS:.1f}s  "
+                        + "  ".join(
+                            f"{name.split()[0]} x={states[name][0]:+.3f} z={states[name][2]:+.3f}"
+                            for name, _flight in runners
+                        ),
+                        flush=True,
+                    )
+            print(f"estimators finished in {time.time() - started:.1f}s", flush=True)
+        except Exception as exc:
+            errors.append(exc)
+
+    errors = []
+
+    if view is None:
+        run_estimators()
+        if errors:
+            raise errors[0]
+    else:
+        worker = threading.Thread(target=run_estimators, name="dd-mhe")
+        worker.start()
+        window_open = True
+        try:
+            while worker.is_alive():
+                if not view.pump():
+                    window_open = False
+                    break
+                time.sleep(0.016)
+            worker.join()
+        finally:
+            if not window_open:
+                view.close()
+        if errors:
+            if window_open:
+                view.close()
+            raise errors[0]
+
+    for name, flight in runners:
+        metrics = tracking_metrics(flight.x)
+        estimates = estimate_metrics(flight.x, flight.x_hat_log)
+        flights[name] = {"x": flight.x, "x_hat": flight.x_hat_log, "reference": metrics.pop("reference")}
         report["results"][name] = metrics
         report["estimates"][name] = estimates
         print(
             f"{name}: vehicle after x {metrics['after']['x']:.3f} m, "
-            f"pitch-rate estimate error after {estimates['after']['pitch_rate']:.3f} rad/s "
-            f"({time.time() - started:.1f}s)",
+            f"pitch-rate estimate error after {estimates['after']['pitch_rate']:.3f} rad/s",
             flush=True,
         )
     out_dir = Path(__file__).resolve().parent
@@ -330,11 +400,25 @@ def figure8_flights():
     print(f"wrote {estimate_path}", flush=True)
     save_figure8_gif(gif_path, flights)
     print(f"wrote {gif_path}", flush=True)
+    if show_gui and view is not None and view.pump():
+        print("Plots are saved. Close the PyBullet window to exit.", flush=True)
+        try:
+            while view.pump():
+                time.sleep(0.016)
+        finally:
+            view.close()
     return report
 
 
 def main():
-    figure8_flights()
+    parser = argparse.ArgumentParser(description="Figure-8 comparison of the two DD-MHE estimators.")
+    parser.add_argument(
+        "--no-gui",
+        action="store_true",
+        help="Skip the live safe-control-gym window.",
+    )
+    args = parser.parse_args()
+    figure8_flights(show_gui=not args.no_gui)
 
 
 if __name__ == "__main__":
