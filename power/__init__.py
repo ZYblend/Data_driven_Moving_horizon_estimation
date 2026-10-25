@@ -1,1 +1,1 @@
-"""Power-system numerical examples for the L4DC revision."""
+"""IEEE 14-bus numerical example."""

@@ -12,9 +12,7 @@ Run the Python examples from the repository root. The quadrotor flight uses [saf
 git submodule update --init quadrotor/safe-control-gym
 ```
 
-### 1. Power systems
-
-#### IEEE 14-bus
+### 1. IEEE 14-bus power system
 
 `power/explore_ieee14.py` estimates the generator angle and speed deviations of the linearized IEEE 14-bus plant (`n = 10`, `p = 19`, `m = 19`, sample time `0.01 s`, horizon `L = 6`). The discrete matrices in `power/ieee14/` come from [Moving-horizon-FDIA](https://github.com/ZYblend/Moving-horizon-FDIA) (`demo_14_bus_system`). Offline data are one persistently exciting rollout of that linear model. Online, scaled measurements have noise `N(0, 0.1^2)`. From `t = 1.5 s`, a constant bias of `40` scaled units is added to the first `k` bus power-injection sensors (measurement channels 5 through 9).
 
@@ -34,20 +32,6 @@ State RMSE is the root-mean-square, over the run, of the Euclidean state error. 
 | 5 | 0.0936 | 0.0016 |
 
 With no attack the two estimators are close. Under the sensor biases, Robust DD-MHE state RMSE rises by about two orders of magnitude, while Resilient DD-MHE stays near the unattacked error. The model-driven pair matches these values at the reported precision. Re-running the script overwrites `power/ieee14_mhe.png` with the time series for this table. The plot already in that file is from an earlier short run (two biases from `t = 0.6 s`) and is not the table above.
-
-#### Single-machine infinite bus
-
-`power/explore_smib.py` runs the same comparison on the ANDES textbook SMIB (classical machine against an infinite bus). The known input is a mechanical-torque deviation. Outputs are rotor angle, rotor speed, and electrical power. A speed bias of `0.001 pu` starts at `t = 2 s`. ANDES is imported from the installed package.
-
-```bash
-python power/explore_smib.py
-```
-
-Open-loop estimates are in `power/smib_mhe.png`. The closed-loop figure uses the data-driven estimates in the torque command: a feedforward torque for a slow angle move, minus a linear gain on the estimated tracking error.
-
-![SMIB closed loop under a speed bias](power/smib_closed_loop.png)
-
-After the speed bias, Robust DD-MHE leaves the angle reference and settles at the wrong angle. Resilient DD-MHE stays on the reference, and its speed returns to the same small oscillation as before the bias.
 
 ### 2. Planar quadrotor
 
