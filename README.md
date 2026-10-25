@@ -61,7 +61,7 @@ with measurement weight `R = 10`. Both estimators share this arrival cost. They 
 | Measurement term | squared residual | absolute residual |
 | Constant sensor bias | the squared penalty draws the state toward the biased sensor | the absolute penalty leaves a sparse bias in a slack variable |
 
-`make_dd_mhe_pair` builds both solvers on one dictionary. Each window is solved with CLARABEL, and with SCS if CLARABEL does not return a solution.
+`make_dd_mhe_pair` builds both solvers on one dictionary. Each window is solved with [CLARABEL](https://github.com/oxfordcontrol/ClarabelDocs), and with [SCS](https://www.cvxgrp.org/scs/) if CLARABEL does not return a solution.
 
 ```python
 from ddmhe import load_hankel, make_dd_mhe_pair
