@@ -31,35 +31,47 @@ State RMSE is the root-mean-square, over the run, of the Euclidean state error. 
 | 4 | 0.0933 | 0.0016 |
 | 5 | 0.0936 | 0.0016 |
 
-With no attack the two estimators are close. Under the sensor biases, Robust DD-MHE state RMSE rises by about two orders of magnitude, while Resilient DD-MHE stays near the unattacked error. The model-driven pair matches these values at the reported precision. Re-running the script overwrites `power/ieee14_mhe.png` with the time series for this table. The plot already in that file is from an earlier short run (two biases from `t = 0.6 s`) and is not the table above.
+With no attack the two estimators are close. Under the sensor biases, Robust DD-MHE state RMSE rises by about two orders of magnitude, while Resilient DD-MHE stays near the unattacked error.
+
+The figure below is the `k = 3` run: three bus power-injection biases from `t = 1.5 s`. Resilient DD-MHE stays on the true angles and speeds. Robust DD-MHE steps away at the attack and stays offset.
+
+![IEEE 14-bus estimates with three biased sensors](power/ieee14_mhe.png)
 
 ### 2. Planar quadrotor
 
 The plant is the safe-control-gym two-dimensional Crazyflie, linearized at hover. States are deviations `[x, x_dot, z, z_dot, theta, theta_dot]`. Outputs are horizontal position, altitude, pitch, pitch rate, and the vertical specific force at the center of mass. The sample time is `0.02 s` and the horizon is `L = 20`. Scaled sensor noise is `N(0, 0.1^2)`.
 
-`quadrotor/simulate_quadrotor.py` compares the four estimators on a waypoint move (`0.40 m` in `x`, `0.20 m` in `z`). The attacked case adds an `8 rad/s` bias to the pitch-rate measurement from `t = 3 s`.
+`quadrotor/simulate_quadrotor.py` closes the loop around each data-driven estimator. The reference is one figure-8 in the vertical plane,
+
+```text
+x = 0.45 sin(ω t) m,    z = 0.22 sin(2 ω t) m,    ω = 2π / 8 s,
+```
+
+flown for `12 s`. An `8 rad/s` pitch-rate bias starts at `t = 4 s`, at the center crossing of the loop.
 
 ```bash
 python -m quadrotor.simulate_quadrotor
 ```
 
-RMSE from `quadrotor/quadrotor_results.json`:
+Tracking RMSE against that reference, from `quadrotor/quadrotor_results.json`:
 
-| Case | Channel | Robust DD-MHE | Resilient DD-MHE |
+| Interval | Channel | Robust DD-MHE | Resilient DD-MHE |
 | --- | --- | ---: | ---: |
-| No attack | `x` (m) | 0.0025 | 0.0027 |
-| No attack | `z` (m) | 0.0023 | 0.0027 |
-| No attack | pitch (deg) | 0.132 | 0.164 |
-| Gyro bias | `x` (m) | 0.0027 | 0.0027 |
-| Gyro bias | `z` (m) | 0.0023 | 0.0027 |
-| Gyro bias | pitch (deg) | 8.070 | 0.233 |
+| Before the bias | `x` (m) | 0.016 | 0.016 |
+| Before the bias | `z` (m) | 0.009 | 0.009 |
+| After the bias | `x` (m) | 0.360 | 0.009 |
+| After the bias | `z` (m) | 0.006 | 0.006 |
 
-Position error stays near a few millimeters in every case. The gyro bias is absorbed by Robust DD-MHE as a pitch error of `8.07 deg` RMSE (`12.2 deg` peak). Resilient DD-MHE keeps the pitch RMSE at `0.23 deg` (`0.70 deg` peak). The model-driven pair again matches the data-driven numbers.
+Before the bias the two flights match. After the bias, Robust DD-MHE leaves the figure-8 in `x` (RMSE `0.36 m`) while Resilient DD-MHE stays on the reference (`0.009 m`). Altitude tracking stays near `6 mm` for both.
 
-`quadrotor/fly_quadrotor_gym.py` closes the same linear-quadratic regulator around each data-driven estimate and integrates the safe-control-gym planar Crazyflie. The recording below is that flight with the pitch-rate bias.
+![Figure-8 tracking after the gyro bias](quadrotor/quadrotor_figure8.png)
+
+The same two flights, side by side. The label switches to "gyro bias on" at `t = 4 s`.
+
+![Figure-8 flight comparison](quadrotor/quadrotor_figure8.gif)
+
+`quadrotor/fly_quadrotor_gym.py` repeats this figure-8 on the nonlinear Crazyflie and replaces the gif with the PyBullet camera view:
 
 ```bash
 python -m quadrotor.fly_quadrotor_gym
 ```
-
-[Closed-loop flight, Robust DD-MHE and Resilient DD-MHE](quadrotor/quadrotor_feedback_corrected.mp4)

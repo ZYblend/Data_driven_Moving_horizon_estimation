@@ -2,13 +2,13 @@
 
 The plant is the safe-control-gym TWO_D Crazyflie, linearized at hover.
 Outputs are horizontal position, altitude, pitch, pitch rate, and the
-vertical specific force at the center of mass. This script compares robust
-and resilient model-driven and data-driven MHE. It does not form F and does
-not compute an NSP constant.
+vertical specific force at the center of mass. The default run closes the
+loop around Robust DD-MHE and Resilient DD-MHE while the vehicle tracks a
+figure-8. A pitch-rate bias starts partway through that loop.
 
 Run from the repository root:
-    python3 -m quadrotor.simulate_quadrotor --survey
     python3 -m quadrotor.simulate_quadrotor
+    python3 -m quadrotor.simulate_quadrotor --open-loop
 """
 
 import argparse
@@ -64,8 +64,12 @@ RHO = 0.95
 NOISE_STD = 0.1
 N_OFFLINE = 160
 DITHER = 0.015  # Newton, about each rotor
-T_FINAL = 6.0
-T_ATTACK = 3.0
+# One vertical-plane figure-8: x = AX sin(wt), z = AZ sin(2wt).
+FIG8_PERIOD = 8.0
+FIG8_AX = 0.45
+FIG8_AZ = 0.22
+T_FINAL = 12.0
+T_ATTACK = 4.0
 N_STEPS = int(round(T_FINAL / TS))
 ATTACK_INDEX = int(round(T_ATTACK / TS))
 # Physical bias added to one output. The gyro entry is rad/s.
@@ -78,12 +82,8 @@ ATTACKS = {
 }
 PRIOR0 = np.array([0.15, 0.0, -0.08, 0.0, 0.08, 0.0])
 X0 = np.zeros(N_STATE)
-
-# Waypoint, in meters, reached by a smooth step during the flight.
-X_GOAL = 0.40
-Z_GOAL = 0.20
-MOVE_START = 0.5
-MOVE_END = 2.2
+# Each rotor's deviation is clipped near the hover thrust, mg/2.
+U_LIMIT = 0.5 * MASS * GRAVITY
 
 NAMES = (
     "Robust MD-MHE",
@@ -102,13 +102,32 @@ def lqr_gain():
 
 
 def reference(step):
+    """Figure-8 state reference, including the velocity and pitch that track it."""
     t = step * TS
-    s = np.clip((t - MOVE_START) / (MOVE_END - MOVE_START), 0.0, 1.0)
-    s = s * s * (3.0 - 2.0 * s)
+    w = 2.0 * np.pi / FIG8_PERIOD
+    s1 = np.sin(w * t)
+    c1 = np.cos(w * t)
     ref = np.zeros(N_STATE)
-    ref[0] = X_GOAL * s
-    ref[2] = Z_GOAL * s
+    ref[0] = FIG8_AX * s1
+    ref[1] = FIG8_AX * w * c1
+    ref[2] = FIG8_AZ * np.sin(2.0 * w * t)
+    ref[3] = FIG8_AZ * 2.0 * w * np.cos(2.0 * w * t)
+    # x_ddot = g * theta on this linearization, and x_ddot = -AX w^2 sin(wt).
+    ref[4] = -FIG8_AX * w * w * s1 / GRAVITY
+    ref[5] = -FIG8_AX * (w ** 3) * c1 / GRAVITY
     return ref
+
+
+def figure8_feedforward(step):
+    """Thrust deviations that produce the figure-8 acceleration on the linear model."""
+    t = step * TS
+    w = 2.0 * np.pi / FIG8_PERIOD
+    z_ddot = -FIG8_AZ * (2.0 * w) ** 2 * np.sin(2.0 * w * t)
+    theta_ddot = FIG8_AX * (w ** 4) * np.sin(w * t) / GRAVITY
+    moment = ARM / (IYY * np.sqrt(2.0))
+    u_sum = MASS * z_ddot
+    u_diff = theta_ddot / moment
+    return np.array([0.5 * (u_sum - u_diff), 0.5 * (u_sum + u_diff)])
 
 
 def simulate(u, x0):
@@ -130,9 +149,17 @@ def closed_loop(n_steps, gain, seed, dither_scale, x0):
     x[0] = x0
     for t in range(n_steps - 1):
         dither = rng.uniform(-dither_scale, dither_scale, size=N_INPUT)
-        u[t] = -gain @ (x[t] - reference(t)) + dither
+        u[t] = np.clip(
+            -gain @ (x[t] - reference(t)) + figure8_feedforward(t) + dither,
+            -U_LIMIT,
+            U_LIMIT,
+        )
         x[t + 1] = A @ x[t] + B @ u[t]
-    u[-1] = -gain @ (x[-1] - reference(n_steps - 1))
+    u[-1] = np.clip(
+        -gain @ (x[-1] - reference(n_steps - 1)) + figure8_feedforward(n_steps - 1),
+        -U_LIMIT,
+        U_LIMIT,
+    )
     return u, x
 
 
@@ -556,6 +583,274 @@ def save_figure(path, x, hats):
     plt.close(fig)
 
 
+def _window_estimate(estimate, u_hist, y_hist, latest, prior0):
+    t = len(y_hist) - 1
+    if t + 1 < L:
+        t0 = 0
+        prior = prior0
+    else:
+        t0 = t - L + 1
+        prior = latest[t0]
+    window = estimate(
+        np.asarray(u_hist[t0 : t + 1]),
+        np.asarray(y_hist[t0 : t + 1]),
+        prior,
+    )
+    for k, time_index in enumerate(range(t0, t + 1)):
+        latest[time_index] = window[k]
+    return window[-1]
+
+
+def fly_with_estimator(n_steps, gain, estimate, seed):
+    """Close the linear plant around one estimator on the figure-8."""
+    rng = np.random.default_rng(seed)
+    x = np.zeros((n_steps, N_STATE))
+    x_hat_log = np.zeros((n_steps, N_STATE))
+    u_hist, y_hist = [], []
+    latest = {}
+    x_hat = np.zeros(N_STATE)
+    prior0 = np.zeros(N_STATE)
+    for t in range(n_steps):
+        ref = reference(t)
+        u_dev = np.clip(
+            -gain @ (x_hat - ref) + figure8_feedforward(t),
+            -U_LIMIT,
+            U_LIMIT,
+        )
+        y = output_scaled(x[t], u_dev)
+        y = y + rng.normal(0.0, NOISE_STD, size=N_MEAS)
+        if t >= ATTACK_INDEX:
+            y[3] += ATTACKS["gyro"][1] / SCALE[3]
+        u_hist.append(u_dev.copy())
+        y_hist.append(y)
+        x_hat = _window_estimate(estimate, u_hist, y_hist, latest, prior0)
+        x_hat_log[t] = x_hat
+        if t + 1 < n_steps:
+            x[t + 1] = A @ x[t] + B @ u_dev
+        if t % 100 == 0:
+            print(
+                f"  t={t * TS:.1f}s x={x[t, 0]:+.3f} z={x[t, 2]:+.3f} "
+                f"pitch={np.degrees(x[t, 4]):+.1f}",
+                flush=True,
+            )
+    return x, x_hat_log
+
+
+def tracking_metrics(x):
+    ref = np.vstack([reference(t) for t in range(x.shape[0])])
+    err = x - ref
+
+    def pack(sl):
+        return {
+            "x": float(np.sqrt(np.mean(err[sl, 0] ** 2))),
+            "z": float(np.sqrt(np.mean(err[sl, 2] ** 2))),
+            "pitch_deg": float(np.degrees(np.sqrt(np.mean(err[sl, 4] ** 2)))),
+        }
+
+    return {
+        "before": pack(slice(0, ATTACK_INDEX)),
+        "after": pack(slice(ATTACK_INDEX, None)),
+        "reference": ref,
+    }
+
+
+def save_figure8_figure(path, flights):
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    ref = next(iter(flights.values()))["reference"]
+    time_axis = np.arange(ref.shape[0]) * TS
+    colors = {"Robust DD-MHE": "#d97706", "Resilient DD-MHE": "#15803d"}
+    fig, axes = plt.subplots(2, 2, figsize=(8.4, 5.2), constrained_layout=True)
+    path_ax, err_ax, x_ax, z_ax = axes.ravel()
+    path_ax.plot(ref[:, 0], ref[:, 2], color="#1d4ed8", lw=1.6, label="reference")
+    path_ax.scatter(
+        [ref[ATTACK_INDEX, 0]],
+        [ref[ATTACK_INDEX, 2]],
+        s=28,
+        c="0.1",
+        zorder=5,
+        label="attack starts",
+    )
+    for name, flight in flights.items():
+        path_ax.plot(
+            flight["x"][:, 0],
+            flight["x"][:, 2],
+            color=colors[name],
+            lw=1.3,
+            label=name,
+        )
+        err_ax.plot(
+            time_axis,
+            flight["x"][:, 0] - ref[:, 0],
+            color=colors[name],
+            lw=1.2,
+        )
+        x_ax.plot(time_axis, flight["x"][:, 0], color=colors[name], lw=1.2)
+        z_ax.plot(time_axis, flight["x"][:, 2], color=colors[name], lw=1.2)
+    err_ax.axhline(0.0, color="#1d4ed8", lw=1.0)
+    x_ax.plot(time_axis, ref[:, 0], color="#1d4ed8", lw=1.4)
+    z_ax.plot(time_axis, ref[:, 2], color="#1d4ed8", lw=1.4)
+    for ax in (err_ax, x_ax, z_ax):
+        ax.axvline(T_ATTACK, color="0.2", ls=":", lw=0.9)
+        ax.set_xlabel("Time (s)")
+        ax.grid(True, alpha=0.3)
+    span = 1.15 * max(FIG8_AX, FIG8_AZ)
+    path_ax.set_xlim(-2.2 * span, 2.2 * span)
+    path_ax.set_ylim(-1.6 * span, 1.6 * span)
+    path_ax.set_aspect("equal", adjustable="box")
+    path_ax.set_xlabel("x (m)")
+    path_ax.set_ylabel("z (m)")
+    path_ax.grid(True, alpha=0.3)
+    path_ax.legend(fontsize=7, loc="best")
+    x_ax.set_ylabel("x (m)")
+    z_ax.set_ylabel("z (m)")
+    err_ax.set_ylabel("x error (m)")
+    fig.suptitle(
+        f"Figure-8, {ATTACKS['gyro'][1]:.0f} rad/s gyro bias from t={T_ATTACK:.0f} s"
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path, dpi=160)
+    plt.close(fig)
+
+
+def save_figure8_gif(path, flights, stride=4):
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from PIL import Image
+
+    names = ("Robust DD-MHE", "Resilient DD-MHE")
+    colors = {"Robust DD-MHE": "#d97706", "Resilient DD-MHE": "#15803d"}
+    ref = flights[names[0]]["reference"]
+    n_steps = ref.shape[0]
+    frames = []
+    fig, axes = plt.subplots(1, 2, figsize=(8.0, 3.6), constrained_layout=True)
+    span = 1.15 * max(FIG8_AX, FIG8_AZ)
+    for ax, name in zip(axes, names):
+        ax.plot(ref[:, 0], ref[:, 2], color="#cbd5e1", lw=1.2)
+        ax.set_xlim(-2.2 * span, 2.2 * span)
+        ax.set_ylim(-1.6 * span, 1.6 * span)
+        ax.set_aspect("equal", adjustable="box")
+        ax.set_xlabel("x (m)")
+        ax.set_title(name)
+        ax.grid(True, alpha=0.25)
+    axes[0].set_ylabel("z (m)")
+    trail = {name: ax.plot([], [], color=colors[name], lw=1.4)[0] for name, ax in zip(names, axes)}
+    body = {name: ax.plot([], [], color="#111827", lw=2.4)[0] for name, ax in zip(names, axes)}
+    hubs = {
+        name: ax.scatter([], [], s=18, c=colors[name], zorder=4)
+        for name, ax in zip(names, axes)
+    }
+    title = fig.suptitle("")
+    indices = list(range(0, n_steps, stride))
+    for t in indices:
+        attacked = t >= ATTACK_INDEX
+        title.set_text(
+            f"t={t * TS:.1f}s"
+            + ("   gyro bias on" if attacked else "   no attack")
+        )
+        for name in names:
+            state = flights[name]["x"][t]
+            trail[name].set_data(
+                flights[name]["x"][: t + 1, 0],
+                flights[name]["x"][: t + 1, 2],
+            )
+            arm = 0.16
+            dx = arm * np.cos(state[4])
+            dz = arm * np.sin(state[4])
+            body[name].set_data(
+                [state[0] - dx, state[0] + dx],
+                [state[2] - dz, state[2] + dz],
+            )
+            hubs[name].set_offsets(
+                np.array(
+                    [
+                        [state[0] - dx, state[2] - dz],
+                        [state[0] + dx, state[2] + dz],
+                    ]
+                )
+            )
+        fig.canvas.draw()
+        rgba = np.asarray(fig.canvas.buffer_rgba())
+        frames.append(Image.fromarray(rgba[..., :3]))
+    plt.close(fig)
+    duration = int(round(1000 * stride * TS))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    frames[0].save(
+        path,
+        save_all=True,
+        append_images=frames[1:],
+        duration=duration,
+        loop=0,
+        optimize=True,
+    )
+
+
+def figure8_flights():
+    """Fly the figure-8 twice, once with each data-driven estimator in the loop."""
+    gain = lqr_gain()
+    need = (N_INPUT + 1) * (L + N_STATE) + 40
+    global N_OFFLINE
+    if N_OFFLINE < need:
+        N_OFFLINE = need
+    u_d, x_d, y_d = offline_trajectory(gain, seed=0)
+    pe_rank, pe_rows = input_excitation_rank(u_d)
+    print(f"offline PE rank {pe_rank}/{pe_rows}", flush=True)
+    if pe_rank != pe_rows:
+        raise RuntimeError("Offline input is not PE of order L+n.")
+    hu, hy, hx = compress_hankel(*prepare_hankel(u_d, y_d, x_d))
+    dd = DataDrivenSolver(hu, hy, hx)
+
+    def robust(u_win, y_win, prior):
+        depth = u_win.shape[0]
+        return robust_dd(hu[depth], hy[depth], hx[depth], u_win, y_win, prior)
+
+    bank = {
+        "Robust DD-MHE": robust,
+        "Resilient DD-MHE": dd.estimate,
+    }
+    flights = {}
+    report = {
+        "trajectory": "figure8",
+        "period_s": FIG8_PERIOD,
+        "ax_m": FIG8_AX,
+        "az_m": FIG8_AZ,
+        "ts": TS,
+        "horizon": L,
+        "attack_time": T_ATTACK,
+        "gyro_bias_rad_s": ATTACKS["gyro"][1],
+        "results": {},
+    }
+    for name, estimate in bank.items():
+        print(f"--- {name} ---", flush=True)
+        started = time.time()
+        x, x_hat = fly_with_estimator(N_STEPS, gain, estimate, seed=2)
+        metrics = tracking_metrics(x)
+        flights[name] = {"x": x, "x_hat": x_hat, "reference": metrics.pop("reference")}
+        report["results"][name] = metrics
+        print(
+            f"{name}: before x {metrics['before']['x']:.3f} m, "
+            f"after x {metrics['after']['x']:.3f} m, "
+            f"after z {metrics['after']['z']:.3f} m, "
+            f"after pitch {metrics['after']['pitch_deg']:.2f} deg "
+            f"({time.time() - started:.1f}s)",
+            flush=True,
+        )
+    out_dir = Path(__file__).resolve().parent
+    figure_path = out_dir / "quadrotor_figure8.png"
+    gif_path = out_dir / "quadrotor_figure8.gif"
+    (out_dir / "quadrotor_results.json").write_text(json.dumps(report, indent=2))
+    save_figure8_figure(figure_path, flights)
+    print(f"wrote {figure_path}", flush=True)
+    save_figure8_gif(gif_path, flights)
+    print(f"wrote {gif_path}", flush=True)
+    return report
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -563,12 +858,25 @@ def main():
         action="store_true",
         help="Model-driven only, for comparing attack channels.",
     )
+    parser.add_argument(
+        "--open-loop",
+        action="store_true",
+        help="Estimate a recorded figure-8 flown with the true state.",
+    )
     parser.add_argument("--horizon", type=int, default=None)
     parser.add_argument("--steps", type=int, default=None)
     parser.add_argument("--cases", default=None, help="Comma-separated attack names.")
     args = parser.parse_args()
-    cases = tuple(args.cases.split(",")) if args.cases else None
-    evaluate(survey=args.survey, horizon=args.horizon, n_steps=args.steps, cases=cases)
+    if args.survey or args.open_loop:
+        cases = tuple(args.cases.split(",")) if args.cases else None
+        evaluate(
+            survey=args.survey,
+            horizon=args.horizon,
+            n_steps=args.steps,
+            cases=cases,
+        )
+    else:
+        figure8_flights()
 
 
 if __name__ == "__main__":

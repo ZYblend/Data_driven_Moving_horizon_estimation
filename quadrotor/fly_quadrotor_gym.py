@@ -2,10 +2,9 @@
 
 The vehicle is the TWO_D quadrotor, integrated with that suite's explicit
 dynamics and rendered by its PyBullet camera. Each flight is closed around
-one estimator: the thrust is the same linear-quadratic regulator used in the
-paper, evaluated at the estimated deviation from hover. A bias is added to
-the pitch-rate measurement that the estimator sees. The two flights are the
-robust and resilient data-driven estimators.
+one estimator while the reference is the figure-8 from simulate_quadrotor.
+A bias is added to the pitch-rate measurement partway along that path. The
+two flights are the robust and resilient data-driven estimators.
 
 safe-control-gym is the submodule in this folder. Its explicit dynamics
 read an attribute named TIMESTEP that the class never sets; this script sets
@@ -17,6 +16,7 @@ Run from the repository root, after `git submodule update --init quadrotor/safe-
 
 import os
 import sys
+from pathlib import Path
 
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
@@ -56,9 +56,9 @@ from safe_control_gym.envs.gym_pybullet_drones.quadrotor import Quadrotor
 # Window length in seconds stays near the paper's 0.4 s.
 sim.L = 24
 HOVER_Z = 1.0
-DURATION = 6.0
-ATTACK_TIME = 3.0
-GYRO_BIAS = 8.0  # rad/s, same bias as the paper comparison
+DURATION = sim.T_FINAL
+ATTACK_TIME = sim.T_ATTACK
+GYRO_BIAS = sim.ATTACKS["gyro"][1]
 PRIOR = np.array([0.05, 0.0, 0.0, 0.0, 0.02, 0.0])
 FRAME_STRIDE = 3
 
@@ -87,29 +87,56 @@ def make_env():
         farVal=20.0,
         physicsClientId=env.PYB_CLIENT,
     )
-    # The waypoint the regulator is flying toward, drawn in both panels.
-    marker = p.createVisualShape(
-        p.GEOM_SPHERE,
-        radius=0.018,
-        rgbaColor=[0.85, 0.15, 0.12, 1.0],
-        physicsClientId=env.PYB_CLIENT,
-    )
-    p.createMultiBody(
-        baseMass=0,
-        baseVisualShapeIndex=marker,
-        basePosition=[sim.X_GOAL, 0.0, HOVER_Z + sim.Z_GOAL],
-        physicsClientId=env.PYB_CLIENT,
-    )
+    marker = draw_course(env)
     aim_camera(env)
-    return env
+    return env, marker
+
+
+def draw_course(env):
+    """Blue beads on the figure-8, and a red bead on the current reference point."""
+    client = env.PYB_CLIENT
+    bead = p.createVisualShape(
+        p.GEOM_SPHERE,
+        radius=0.012,
+        rgbaColor=[0.25, 0.45, 0.85, 0.9],
+        physicsClientId=client,
+    )
+    period_steps = max(int(round(sim.FIG8_PERIOD / sim.TS)), 1)
+    for i in range(64):
+        ref = sim.reference(int(round(i * period_steps / 64)))
+        p.createMultiBody(
+            baseMass=0,
+            baseVisualShapeIndex=bead,
+            basePosition=[float(ref[0]), 0.0, float(HOVER_Z + ref[2])],
+            physicsClientId=client,
+        )
+    marker_shape = p.createVisualShape(
+        p.GEOM_SPHERE,
+        radius=0.025,
+        rgbaColor=[0.85, 0.15, 0.12, 1.0],
+        physicsClientId=client,
+    )
+    return p.createMultiBody(
+        baseMass=0,
+        baseVisualShapeIndex=marker_shape,
+        basePosition=[0.0, 0.0, HOVER_Z],
+        physicsClientId=client,
+    )
 
 
 def aim_camera(env):
-    """Close side view of the short move, so a drift of a few decimetres reads clearly."""
+    """Side view wide enough for the whole figure-8."""
     env.CAM_VIEW = p.computeViewMatrix(
-        cameraEyePosition=[0.20, -0.52, 1.10],
-        cameraTargetPosition=[0.20, 0.0, 1.10],
+        cameraEyePosition=[0.0, -1.8, HOVER_Z],
+        cameraTargetPosition=[0.0, 0.0, HOVER_Z],
         cameraUpVector=[0.0, 0.0, 1.0],
+        physicsClientId=env.PYB_CLIENT,
+    )
+    env.CAM_PRO = p.computeProjectionMatrixFOV(
+        fov=55.0,
+        aspect=env.RENDER_WIDTH / env.RENDER_HEIGHT,
+        nearVal=0.02,
+        farVal=20.0,
         physicsClientId=env.PYB_CLIENT,
     )
 
@@ -146,8 +173,17 @@ def estimate_now(estimate, u_hist, y_hist, latest):
     return window[-1]
 
 
+def move_marker(env, marker, ref):
+    p.resetBasePositionAndOrientation(
+        marker,
+        [float(ref[0]), 0.0, float(HOVER_Z + ref[2])],
+        [0.0, 0.0, 0.0, 1.0],
+        physicsClientId=env.PYB_CLIENT,
+    )
+
+
 def fly(name, estimate, gain, hover, attack=True):
-    env = make_env()
+    env, marker = make_env()
     n_steps = int(round(DURATION / sim.TS))
     attack_index = int(round(ATTACK_TIME / sim.TS))
     rng = np.random.default_rng(2)
@@ -165,7 +201,8 @@ def fly(name, estimate, gain, hover, attack=True):
     for t in range(n_steps):
         dev = deviation(env.state)
         ref = sim.reference(t)
-        u_dev = -gain @ (x_hat - ref)
+        move_marker(env, marker, ref)
+        u_dev = -gain @ (x_hat - ref) + sim.figure8_feedforward(t)
         thrust = np.clip(hover + u_dev, low, high)
         u_dev = thrust - hover
         y = measurement(dev, u_dev, rng, attack and t >= attack_index)
@@ -200,8 +237,9 @@ def annotate(frame, title, dev, t):
     image = Image.fromarray(frame)
     draw = ImageDraw.Draw(image)
     draw.rectangle((0, 0, image.width, 36), fill=(255, 255, 255))
+    attack = "   gyro bias" if t >= ATTACK_TIME else ""
     text = (
-        f"{title}   t={t:0.1f}s   "
+        f"{title}   t={t:0.1f}s{attack}   "
         f"x={dev[0]:+0.2f} m   z={dev[2] + HOVER_Z:0.2f} m   "
         f"pitch={np.degrees(dev[4]):+0.1f} deg"
     )
@@ -211,14 +249,16 @@ def annotate(frame, title, dev, t):
 
 def fly_truth(gain, hover):
     """Same regulator on the measured state, so the controller itself can be judged."""
-    env = make_env()
+    env, marker = make_env()
     n_steps = int(round(DURATION / sim.TS))
     low = np.array(env.action_space.low, dtype=float)
     high = np.array(env.action_space.high, dtype=float)
     states = []
     for t in range(n_steps):
         dev = deviation(env.state)
-        thrust = np.clip(hover - gain @ (dev - sim.reference(t)), low, high)
+        ref = sim.reference(t)
+        move_marker(env, marker, ref)
+        thrust = np.clip(hover - gain @ (dev - ref) + sim.figure8_feedforward(t), low, high)
         env.step(thrust)
         states.append(deviation(env.state))
     env.close()
@@ -229,6 +269,38 @@ def fly_truth(gain, hover):
         flush=True,
     )
     return states
+
+
+def write_gif(path, robust_frames, resilient_frames, robust_states, resilient_states):
+    from PIL import Image
+
+    frames = []
+    n = min(len(robust_frames), len(resilient_frames))
+    for i in range(0, n, 2):
+        t = i * FRAME_STRIDE * sim.TS
+        left = annotate(robust_frames[i], "Robust DD-MHE", robust_states[i * FRAME_STRIDE], t)
+        right = annotate(
+            resilient_frames[i],
+            "Resilient DD-MHE",
+            resilient_states[i * FRAME_STRIDE],
+            t,
+        )
+        gap = np.full((left.shape[0], 8, 3), 255, dtype=np.uint8)
+        panel = np.concatenate([left, gap, right], axis=1)
+        image = Image.fromarray(panel)
+        image.thumbnail((960, 360))
+        frames.append(image)
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    duration = int(round(2000 * FRAME_STRIDE * sim.TS))
+    frames[0].save(
+        path,
+        save_all=True,
+        append_images=frames[1:],
+        duration=max(duration, 40),
+        loop=0,
+        optimize=True,
+    )
+    print(f"wrote {path}", flush=True)
 
 
 def write_video(path, robust_frames, resilient_frames, robust_states, resilient_states):
@@ -396,7 +468,7 @@ def paper_flights():
         "Resilient MD-MHE": md.estimate,
         "Resilient DD-MHE": dd.estimate,
     }
-    env = make_env()
+    env, _marker = make_env()
     hover = np.full(2, env.MASS * env.GRAVITY_ACC / 2.0)
     env.close()
     report = {"pe_rank": [pe_rank, pe_rows], "cases": {}}
@@ -452,7 +524,7 @@ def main():
         flush=True,
     )
 
-    env = make_env()
+    env, _marker = make_env()
     hover = np.full(2, env.MASS * env.GRAVITY_ACC / 2.0)
     env.close()
     print("hover thrust", hover, "gain theta column", gain[:, 4], flush=True)
@@ -462,12 +534,29 @@ def main():
     resilient_states, resilient_frames = fly(
         "Resilient DD-MHE", dd.estimate, gain, hover
     )
-    out = os.environ.get(
+    out_dir = os.path.dirname(os.path.abspath(__file__))
+    gif_path = os.environ.get(
         "FLIGHT_VIDEO",
-        "/opt/cursor/artifacts/quadrotor_feedback_corrected.mp4",
+        os.path.join(out_dir, "quadrotor_figure8.gif"),
     )
-    os.makedirs(os.path.dirname(out), exist_ok=True)
-    write_video(out, robust_frames, resilient_frames, robust_states, resilient_states)
+    write_gif(gif_path, robust_frames, resilient_frames, robust_states, resilient_states)
+    plot_path = os.path.join(out_dir, "quadrotor_figure8.png")
+    sim.save_figure8_figure(
+        Path(plot_path),
+        {
+            "Robust DD-MHE": {
+                "x": robust_states,
+                "reference": np.vstack([sim.reference(t) for t in range(robust_states.shape[0])]),
+            },
+            "Resilient DD-MHE": {
+                "x": resilient_states,
+                "reference": np.vstack(
+                    [sim.reference(t) for t in range(resilient_states.shape[0])]
+                ),
+            },
+        },
+    )
+    print(f"wrote {plot_path}", flush=True)
     # Position error against the reference after the move, before and after the attack.
     n = robust_states.shape[0]
     attack_index = int(round(ATTACK_TIME / sim.TS))

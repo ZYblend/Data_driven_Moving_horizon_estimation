@@ -34,18 +34,14 @@
       "k": 0,
       "support": [],
       "rmse": {
-        "Robust MD-MHE": 0.001338876969202351,
-        "Robust DD-MHE": 0.0013388769690812305,
-        "Resilient MD-MHE": 0.0015009329218064694,
-        "Resilient DD-MHE": 0.0015009319998630613
+        "Robust DD-MHE": 0.001338876969080952,
+        "Resilient DD-MHE": 0.0015009323958353575
       },
       "mae": {
-        "Robust MD-MHE": 0.021028536222096113,
-        "Robust DD-MHE": 0.021028536217216332,
-        "Resilient MD-MHE": 0.021066333038059503,
-        "Resilient DD-MHE": 0.021066332957129945
+        "Robust DD-MHE": 0.021028536217205518,
+        "Resilient DD-MHE": 0.021066332957101253
       },
-      "seconds": 66.82483100891113
+      "seconds": 157.66325521469116
     },
     {
       "k": 1,
@@ -53,18 +49,14 @@
         5
       ],
       "rmse": {
-        "Robust MD-MHE": 0.1776828992944003,
         "Robust DD-MHE": 0.17768289929437614,
-        "Resilient MD-MHE": 0.001789665776879323,
-        "Resilient DD-MHE": 0.0017896652127179758
+        "Resilient DD-MHE": 0.001789665049520298
       },
       "mae": {
-        "Robust MD-MHE": 0.20699017631687705,
-        "Robust DD-MHE": 0.2069901763198034,
-        "Resilient MD-MHE": 0.021066333038069318,
-        "Resilient DD-MHE": 0.02106633295712994
+        "Robust DD-MHE": 0.2069901763198041,
+        "Resilient DD-MHE": 0.021066332957101256
       },
-      "seconds": 66.3604781627655
+      "seconds": 147.33246541023254
     },
     {
       "k": 2,
@@ -73,18 +65,14 @@
         6
       ],
       "rmse": {
-        "Robust MD-MHE": 0.11043148270062388,
-        "Robust DD-MHE": 0.11043148270058266,
-        "Resilient MD-MHE": 0.0016332596518454118,
-        "Resilient DD-MHE": 0.0016332596398193025
+        "Robust DD-MHE": 0.11043148270058256,
+        "Resilient DD-MHE": 0.0016332591271372777
       },
       "mae": {
-        "Robust MD-MHE": 0.1290057714255522,
-        "Robust DD-MHE": 0.12900577142376013,
-        "Resilient MD-MHE": 0.021066333038069318,
-        "Resilient DD-MHE": 0.02106633295712994
+        "Robust DD-MHE": 0.12900577142375932,
+        "Resilient DD-MHE": 0.021066332957101256
       },
-      "seconds": 66.84624814987183
+      "seconds": 166.5771300792694
     },
     {
       "k": 3,
@@ -94,18 +82,14 @@
         7
       ],
       "rmse": {
-        "Robust MD-MHE": 0.10910870923735311,
-        "Robust DD-MHE": 0.10910870923742878,
-        "Resilient MD-MHE": 0.0016494490880977148,
-        "Resilient DD-MHE": 0.001649447613089382
+        "Robust DD-MHE": 0.10910870923742867,
+        "Resilient DD-MHE": 0.0016494474026908612
       },
       "mae": {
-        "Robust MD-MHE": 0.12762691344743743,
-        "Robust DD-MHE": 0.1276269134467419,
-        "Resilient MD-MHE": 0.021066333038069318,
-        "Resilient DD-MHE": 0.02106633295712994
+        "Robust DD-MHE": 0.12762691344674187,
+        "Resilient DD-MHE": 0.021066332957101256
       },
-      "seconds": 66.78652119636536
+      "seconds": 148.5671260356903
     },
     {
       "k": 4,
@@ -116,18 +100,14 @@
         8
       ],
       "rmse": {
-        "Robust MD-MHE": 0.093277974219645,
-        "Robust DD-MHE": 0.09327797421965418,
-        "Resilient MD-MHE": 0.001629115980016769,
-        "Resilient DD-MHE": 0.0016291176758067869
+        "Robust DD-MHE": 0.0932779742196542,
+        "Resilient DD-MHE": 0.0016291175485736754
       },
       "mae": {
-        "Robust MD-MHE": 0.10909658353794374,
-        "Robust DD-MHE": 0.10909658353928477,
-        "Resilient MD-MHE": 0.021066333038069318,
-        "Resilient DD-MHE": 0.02106633295712994
+        "Robust DD-MHE": 0.10909658353928492,
+        "Resilient DD-MHE": 0.021066332957101256
       },
-      "seconds": 66.21542549133301
+      "seconds": 149.34486842155457
     },
     {
       "k": 5,
@@ -139,19 +119,15 @@
         9
       ],
       "rmse": {
-        "Robust MD-MHE": 0.09356589737215876,
-        "Robust DD-MHE": 0.09356589737214069,
-        "Resilient MD-MHE": 0.0016321728404438101,
-        "Resilient DD-MHE": 0.0016321727169797736
+        "Robust DD-MHE": 0.09356589737214066,
+        "Resilient DD-MHE": 0.001632173062652259
       },
       "mae": {
-        "Robust MD-MHE": 0.10939543227352726,
-        "Robust DD-MHE": 0.10939543227507399,
-        "Resilient MD-MHE": 0.021066333038069318,
-        "Resilient DD-MHE": 0.02106633295712994
+        "Robust DD-MHE": 0.10939543227507487,
+        "Resilient DD-MHE": 0.021066332957101256
       },
-      "seconds": 65.53327012062073
+      "seconds": 147.55096006393433
     }
   ],
-  "figure": "/workspace/image/ieee14_mhe.png"
+  "figure": "C:\\Users\\Abelb\\OneDrive\\Documents\\Data_driven_Moving_horizon_estimation\\power\\ieee14_mhe.png"
 }
