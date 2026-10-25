@@ -1,0 +1,11 @@
+# Core environment for ddmhe, the IEEE 14-bus example, and the linear quadrotor.
+# Versions below are the ones used to produce the results in the README.
+# Tested on Python 3.13.
+
+numpy==2.5.2
+scipy==1.18.1
+cvxpy==1.9.2
+clarabel==0.11.1
+scs==3.3.1
+matplotlib==3.11.1
+pillow==12.3.0

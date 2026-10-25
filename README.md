@@ -2,6 +2,37 @@
 
 Python examples of data-driven moving horizon estimation (DD-MHE). The shared library is `ddmhe`. Two applications compare **Robust DD-MHE** with the proposed **Resilient DD-MHE** when a sensor is biased: a planar quadrotor on a figure-8, and the IEEE 14-bus system.
 
+## Setup
+
+The repository does not commit a virtual environment. Create one with Python 3.11 or newer (the pinned stack below was run on Python 3.13), then install `requirements.txt`. That file covers `ddmhe`, the IEEE 14-bus example, and the linear figure-8.
+
+```bash
+python -m venv .venv
+```
+
+Windows (PowerShell):
+
+```powershell
+.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
+macOS and Linux:
+
+```bash
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
+The nonlinear Crazyflie flight also needs the packages in `requirements-gym.txt`, after the safe-control-gym submodule is present:
+
+```bash
+git submodule update --init quadrotor/safe-control-gym
+python -m pip install -r requirements-gym.txt
+```
+
 ## Data-driven MHE
 
 A moving-horizon estimator reconstructs the recent state from a short window of inputs and outputs. DD-MHE does that fit against a Hankel dictionary recorded offline, so the online program does not contain a state-space model.
@@ -43,7 +74,7 @@ Every example is two scripts. The first records the offline trajectory, prints t
 
 ## Examples
 
-Run the commands from the repository root. The library needs NumPy, CVXPY, Matplotlib, and Pillow.
+Run the commands from the repository root, with the virtual environment from [Setup](#setup) activated.
 
 ### 1. Planar quadrotor
 
