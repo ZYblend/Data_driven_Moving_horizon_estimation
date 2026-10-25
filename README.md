@@ -10,6 +10,18 @@ Python examples of data-driven moving horizon estimation (DD-MHE). The shared li
          year={2027},
          url = {}}
 ```
+```
+@article{zheng2025resilient,
+  title={Resilient State Recovery Using Prior Measurement Support Information},
+  author={Zheng, Yu and Anubi, Olugbenga Moses and Dixon, Warren E},
+  journal={SIAM Journal on Control and Optimization},
+  volume={63},
+  number={5},
+  pages={3703--3727},
+  year={2025},
+  publisher={SIAM}
+}
+```
 
 ## Setup
 
