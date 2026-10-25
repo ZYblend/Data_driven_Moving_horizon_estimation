@@ -29,7 +29,9 @@ plant.TS = 1.0 / 60.0
 
 import numpy as np
 import pybullet as p
-import quadrotor.simulate_quadrotor as sim
+import quadrotor.trajectory as sim
+from ddmhe import build_compressed_hankel, make_dd_mhe_pair, print_hankel_analysis, rank_analysis
+from quadrotor.simulate_quadrotor import save_figure8_figure
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 GYM_ROOT = os.environ.get("SAFE_CONTROL_GYM", os.path.join(_HERE, "safe-control-gym"))
@@ -439,39 +441,38 @@ def save_flight_figure(path, flights):
     plt.close(fig)
 
 
+def dd_bank(gain):
+    """Offline dictionary at this sample time, then the shared robust/resilient factory."""
+    need = (sim.N_INPUT + 1) * (sim.L + sim.N_STATE) + 40
+    sim.N_OFFLINE = max(sim.N_OFFLINE, need)
+    u_d, x_d, y_d = sim.offline_trajectory(gain, seed=0, n_samples=sim.N_OFFLINE)
+    report = rank_analysis(u_d, y_d, x_d, sim.L)
+    print_hankel_analysis(report)
+    if not report["persistently_exciting"]:
+        raise RuntimeError("Offline input is not persistently exciting of order L+n.")
+    hu, hy, hx = build_compressed_hankel(u_d, y_d, x_d, sim.L)
+    solvers = make_dd_mhe_pair(
+        hu,
+        hy,
+        hx,
+        horizon=sim.L,
+        p_weight=sim.P_WEIGHT,
+        r_weight=sim.R_WEIGHT,
+        rho=sim.RHO,
+    )
+    return {name: solver.estimate for name, solver in solvers.items()}
+
+
 def paper_flights():
     """Closed-loop flights for the quadrotor subsection, with and without the bias."""
     global FRAME_STRIDE
     FRAME_STRIDE = 10**9
     gain = sim.lqr_gain()
-    sim.N_OFFLINE = max(sim.N_OFFLINE, (sim.N_INPUT + 1) * (sim.L + sim.N_STATE) + 40)
-    u_d, x_d, y_d = sim.offline_trajectory(gain, seed=0)
-    pe_rank, pe_rows = sim.input_excitation_rank(u_d)
-    print(f"sample {sim.TS:.6f}s, L={sim.L}, offline rank {pe_rank}/{pe_rows}", flush=True)
-    hu, hy, hx = sim.compress_hankel(*sim.prepare_hankel(u_d, y_d, x_d))
-    powers = [np.eye(sim.N_STATE)]
-    for _ in range(sim.L - 1):
-        powers.append(sim.A @ powers[-1])
-    dd = sim.DataDrivenSolver(hu, hy, hx)
-    md = sim.ModelSolver(powers)
-
-    def robust_dd(u_win, y_win, prior):
-        depth = u_win.shape[0]
-        return sim.robust_dd(hu[depth], hy[depth], hx[depth], u_win, y_win, prior)
-
-    def robust_md(u_win, y_win, prior):
-        return sim.robust_md(u_win, y_win, prior, powers)
-
-    bank = {
-        "Robust MD-MHE": robust_md,
-        "Robust DD-MHE": robust_dd,
-        "Resilient MD-MHE": md.estimate,
-        "Resilient DD-MHE": dd.estimate,
-    }
+    bank = dd_bank(gain)
     env, _marker = make_env()
     hover = np.full(2, env.MASS * env.GRAVITY_ACC / 2.0)
     env.close()
-    report = {"pe_rank": [pe_rank, pe_rows], "cases": {}}
+    report = {"cases": {}}
     attacked = {}
     for attack, case in (False, "none"), (True, "gyro"):
         print(f"--- {case} ---", flush=True)
@@ -493,31 +494,14 @@ def paper_flights():
 
 def main():
     gain = sim.lqr_gain()
-    # Offline excitation of the linearization at this sample time.
-    sim.N_OFFLINE = max(sim.N_OFFLINE, (sim.N_INPUT + 1) * (sim.L + sim.N_STATE) + 40)
-    u_d, x_d, y_d = sim.offline_trajectory(gain, seed=0)
-    pe_rank, pe_rows = sim.input_excitation_rank(u_d)
-    print(f"sample {sim.TS:.4f}s, L={sim.L}, offline rank {pe_rank}/{pe_rows}", flush=True)
-    if pe_rank != pe_rows:
-        raise RuntimeError("Offline input is not persistently exciting.")
-    hu, hy, hx = sim.compress_hankel(*sim.prepare_hankel(u_d, y_d, x_d))
-    powers = [np.eye(sim.N_STATE)]
-    for _ in range(sim.L - 1):
-        powers.append(sim.A @ powers[-1])
-    dd = sim.DataDrivenSolver(hu, hy, hx)
-
-    def robust(u_win, y_win, prior):
-        depth = u_win.shape[0]
-        return sim.robust_dd(hu[depth], hy[depth], hx[depth], u_win, y_win, prior)
-
-    # One window, gyro bias only, to confirm the resilient cost still rejects it.
+    bank = dd_bank(gain)
     depth = sim.L
     u0 = np.zeros((depth, sim.N_INPUT))
     y0 = np.zeros((depth, sim.N_MEAS))
     y0[:, 3] = GYRO_BIAS / sim.SCALE[3]
-    md = sim.ModelSolver(powers)
-    hat_s = md.estimate(u0, y0, np.zeros(sim.N_STATE))
-    hat_r = sim.robust_md(u0, y0, np.zeros(sim.N_STATE), powers)
+    prior = np.zeros(sim.N_STATE)
+    hat_s = bank["Resilient DD-MHE"](u0, y0, prior)
+    hat_r = bank["Robust DD-MHE"](u0, y0, prior)
     print(
         f"one-window pitch-rate: resilient {hat_s[:, 5].mean():.3f}, "
         f"robust {hat_r[:, 5].mean():.3f} rad/s",
@@ -530,9 +514,9 @@ def main():
     print("hover thrust", hover, "gain theta column", gain[:, 4], flush=True)
     fly_truth(gain, hover)
 
-    robust_states, robust_frames = fly("Robust DD-MHE", robust, gain, hover)
+    robust_states, robust_frames = fly("Robust DD-MHE", bank["Robust DD-MHE"], gain, hover)
     resilient_states, resilient_frames = fly(
-        "Resilient DD-MHE", dd.estimate, gain, hover
+        "Resilient DD-MHE", bank["Resilient DD-MHE"], gain, hover
     )
     out_dir = os.path.dirname(os.path.abspath(__file__))
     gif_path = os.environ.get(
@@ -541,7 +525,7 @@ def main():
     )
     write_gif(gif_path, robust_frames, resilient_frames, robust_states, resilient_states)
     plot_path = os.path.join(out_dir, "quadrotor_figure8.png")
-    sim.save_figure8_figure(
+    save_figure8_figure(
         Path(plot_path),
         {
             "Robust DD-MHE": {

@@ -34,14 +34,14 @@
       "k": 0,
       "support": [],
       "rmse": {
-        "Robust DD-MHE": 0.001338876969080952,
-        "Resilient DD-MHE": 0.0015009323958353575
+        "Robust DD-MHE": 0.0013387189253004463,
+        "Resilient DD-MHE": 0.0015009456862655314
       },
       "mae": {
         "Robust DD-MHE": 0.021028536217205518,
         "Resilient DD-MHE": 0.021066332957101253
       },
-      "seconds": 157.66325521469116
+      "seconds": 143.2633879184723
     },
     {
       "k": 1,
@@ -49,14 +49,14 @@
         5
       ],
       "rmse": {
-        "Robust DD-MHE": 0.17768289929437614,
-        "Resilient DD-MHE": 0.001789665049520298
+        "Robust DD-MHE": 0.1776826887689059,
+        "Resilient DD-MHE": 0.0017896640743321176
       },
       "mae": {
-        "Robust DD-MHE": 0.2069901763198041,
+        "Robust DD-MHE": 0.20698979624076866,
         "Resilient DD-MHE": 0.021066332957101256
       },
-      "seconds": 147.33246541023254
+      "seconds": 144.5114221572876
     },
     {
       "k": 2,
@@ -65,14 +65,14 @@
         6
       ],
       "rmse": {
-        "Robust DD-MHE": 0.11043148270058256,
-        "Resilient DD-MHE": 0.0016332591271372777
+        "Robust DD-MHE": 0.1104311973435071,
+        "Resilient DD-MHE": 0.0016332580269483965
       },
       "mae": {
-        "Robust DD-MHE": 0.12900577142375932,
+        "Robust DD-MHE": 0.12900556670117005,
         "Resilient DD-MHE": 0.021066332957101256
       },
-      "seconds": 166.5771300792694
+      "seconds": 136.30828213691711
     },
     {
       "k": 3,
@@ -82,14 +82,14 @@
         7
       ],
       "rmse": {
-        "Robust DD-MHE": 0.10910870923742867,
-        "Resilient DD-MHE": 0.0016494474026908612
+        "Robust DD-MHE": 0.10910845533351933,
+        "Resilient DD-MHE": 0.0016494463083002778
       },
       "mae": {
-        "Robust DD-MHE": 0.12762691344674187,
+        "Robust DD-MHE": 0.12762665585829944,
         "Resilient DD-MHE": 0.021066332957101256
       },
-      "seconds": 148.5671260356903
+      "seconds": 135.7301094532013
     },
     {
       "k": 4,
@@ -100,14 +100,14 @@
         8
       ],
       "rmse": {
-        "Robust DD-MHE": 0.0932779742196542,
-        "Resilient DD-MHE": 0.0016291175485736754
+        "Robust DD-MHE": 0.09327775764457122,
+        "Resilient DD-MHE": 0.0016289497057189106
       },
       "mae": {
-        "Robust DD-MHE": 0.10909658353928492,
+        "Robust DD-MHE": 0.1090962718168698,
         "Resilient DD-MHE": 0.021066332957101256
       },
-      "seconds": 149.34486842155457
+      "seconds": 163.1545705795288
     },
     {
       "k": 5,
@@ -119,14 +119,14 @@
         9
       ],
       "rmse": {
-        "Robust DD-MHE": 0.09356589737214066,
-        "Resilient DD-MHE": 0.001632173062652259
+        "Robust DD-MHE": 0.09356568346790066,
+        "Resilient DD-MHE": 0.001631907198244873
       },
       "mae": {
-        "Robust DD-MHE": 0.10939543227507487,
+        "Robust DD-MHE": 0.10939511349914009,
         "Resilient DD-MHE": 0.021066332957101256
       },
-      "seconds": 147.55096006393433
+      "seconds": 168.64754152297974
     }
   ],
   "figure": "C:\\Users\\Abelb\\OneDrive\\Documents\\Data_driven_Moving_horizon_estimation\\power\\ieee14_mhe.png"

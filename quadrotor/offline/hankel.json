@@ -1,0 +1,23 @@
+{
+  "horizon": 20,
+  "ts": 0.02,
+  "n_state": 6,
+  "n_input": 2,
+  "p_weight": 1.0,
+  "r_weight": 10.0,
+  "rho": 0.95,
+  "rank": {
+    "samples": 160,
+    "horizon": 20,
+    "n_state": 6,
+    "n_input": 2,
+    "order": 26,
+    "input_rows": 52,
+    "input_columns": 135,
+    "input_rank": 52,
+    "persistently_exciting": true,
+    "joint_rows": 260,
+    "joint_columns": 141,
+    "joint_rank": 46
+  }
+}

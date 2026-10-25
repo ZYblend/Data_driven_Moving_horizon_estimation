@@ -1,23 +1,108 @@
 # Data-driven moving horizon estimation
 
-Data-driven moving horizon estimation (DD-MHE) from a persistently exciting input-output Hankel matrix, together with two application examples that compare **Robust DD-MHE** and the proposed **Resilient DD-MHE**.
+Python examples of data-driven moving horizon estimation (DD-MHE). The shared library is `ddmhe`. Two applications compare **Robust DD-MHE** with the proposed **Resilient DD-MHE** when a sensor is biased: a planar quadrotor on a figure-8, and the IEEE 14-bus system.
 
-Robust DD-MHE penalizes the squared measurement residual. Resilient DD-MHE penalizes the absolute residual, with a forgetting factor, so a sparse set of sensor biases can be rejected. When the offline Hankel matrix is persistently exciting, the data-driven estimates agree with the matching model-driven estimators. The tables below report the data-driven pair.
+## Data-driven MHE
 
-## Application examples
+A moving-horizon estimator reconstructs the recent state from a short window of inputs and outputs. DD-MHE does that fit against a Hankel dictionary recorded offline, so the online program does not contain a state-space model.
 
-Run the Python examples from the repository root. The quadrotor flight uses [safe-control-gym](https://github.com/learnsyslab/safe-control-gym) as a submodule pinned at `6b5391d`. After cloning this repository:
+**Offline dictionary.** One persistently exciting trajectory is arranged into block-Hankel matrices of the input, the output, and the state. `rank_analysis` checks the standard persistence-of-excitation condition: the input Hankel matrix of order `L + n` has full row rank, where `L` is the horizon and `n` is the state dimension. `build_compressed_hankel` keeps the joint numerical column space of those three matrices. `save_hankel` writes the compressed dictionary and a JSON sidecar. The preparation script prints this rank report and exits if the input is rank-deficient.
+
+**Online window.** At each time the solver represents the latest window as a linear combination of the dictionary columns. The measured input is matched exactly. The estimated state is the same combination of the state columns. A forgetting factor `rho = 0.95` gives recent samples more weight. The arrival cost on the state at the start of the window is
+
+```text
+P · rho^(d − 1) · ||x0 − prior||,    P = 1,
+```
+
+with measurement weight `R = 10`. Both estimators share this arrival cost. They differ in the measurement term:
+
+| | Robust DD-MHE | Resilient DD-MHE |
+| --- | --- | --- |
+| Measurement term | squared residual | absolute residual |
+| Constant sensor bias | the squared penalty draws the state toward the biased sensor | the absolute penalty leaves a sparse bias in a slack variable |
+
+`make_dd_mhe_pair` builds both solvers on one dictionary. Each window is solved with CLARABEL, and with SCS if CLARABEL does not return a solution.
+
+```python
+from ddmhe import load_hankel, make_dd_mhe_pair
+
+_u, _y, _x, hu, hy, hx, meta = load_hankel("quadrotor/offline/hankel.npz")
+solvers = make_dd_mhe_pair(
+    hu,
+    hy,
+    hx,
+    horizon=int(meta["horizon"]),
+    p_weight=1.0,
+    r_weight=10.0,
+    rho=0.95,
+)
+window = solvers["Resilient DD-MHE"].estimate(u_window, y_window, prior)
+```
+
+Every example is two scripts. The first records the offline trajectory, prints the Hankel rank, and saves the dictionary. The second loads that file and runs the online estimate.
+
+## Examples
+
+Run the commands from the repository root. The library needs NumPy, CVXPY, Matplotlib, and Pillow.
+
+### 1. Planar quadrotor
+
+The plant is the [safe-control-gym](https://github.com/learnsyslab/safe-control-gym) two-dimensional Crazyflie, linearized at hover and pinned in this repo at commit `6b5391d`. States are deviations `[x, x_dot, z, z_dot, theta, theta_dot]`. Outputs are horizontal position, altitude, pitch, pitch rate, and the vertical specific force at the center of mass. The sample time is `0.02 s` and the horizon is `L = 20`. Scaled sensor noise is `N(0, 0.1^2)`.
+
+`quadrotor/prepare_offline.py` rolls the linear plant out about hover, checks the Hankel rank, and writes `quadrotor/offline/hankel.npz`. On the recorded rollout the input Hankel matrix of order `L + n = 26` has rank 52 / 52. `quadrotor/simulate_quadrotor.py` loads that dictionary and closes an LQR loop around each estimator. The reference is one figure-8 in the vertical plane,
+
+```text
+x = 0.45 sin(ω t) m,    z = 0.22 sin(2 ω t) m,    ω = 2π / 8 s,
+```
+
+flown for `12 s`. An `8 rad/s` pitch-rate bias starts at `t = 4 s`, at the center crossing of the loop.
+
+```bash
+python -m quadrotor.prepare_offline
+python -m quadrotor.simulate_quadrotor
+```
+
+After the bias, Robust DD-MHE leaves the figure-8 in `x` (RMSE `0.360 m`). Resilient DD-MHE stays on the reference (`0.009 m`). Altitude tracking stays near `6 mm` for both. The animation below is that pair of flights. The label switches to "gyro bias on" at `t = 4 s`.
+
+![Figure-8 flight comparison](quadrotor/quadrotor_figure8.gif)
+
+![Figure-8 tracking after the gyro bias](quadrotor/quadrotor_figure8.png)
+
+Tracking RMSE against the reference, from `quadrotor/quadrotor_results.json`:
+
+| Interval | Channel | Robust DD-MHE | Resilient DD-MHE |
+| --- | --- | ---: | ---: |
+| Before the bias | `x` (m) | 0.015 | 0.016 |
+| Before the bias | `z` (m) | 0.008 | 0.009 |
+| After the bias | `x` (m) | 0.360 | 0.009 |
+| After the bias | `z` (m) | 0.006 | 0.006 |
+
+The vehicle leaves the path because of the pitch estimate. After the bias, both estimators still follow the true horizontal position (RMSE about `3 mm`). Robust DD-MHE folds the gyro bias into pitch (RMSE `11.7 deg`) and pitch rate (RMSE `1.30 rad/s`). The LQR acts on that pitch estimate, so `x` drifts off the figure-8. Resilient DD-MHE keeps the pitch error at `0.27 deg` and the pitch-rate error at `0.030 rad/s`.
+
+| Interval | Estimate error | Robust DD-MHE | Resilient DD-MHE |
+| --- | --- | ---: | ---: |
+| After the bias | pitch (deg) | 11.67 | 0.27 |
+| After the bias | pitch rate (rad/s) | 1.303 | 0.030 |
+| After the bias | `x` (m) | 0.0025 | 0.0029 |
+
+![True state against each estimate](quadrotor/quadrotor_estimate.png)
+
+`quadrotor/fly_quadrotor_gym.py` repeats the same figure-8 on the nonlinear Crazyflie. It builds its own Hankel dictionary at `60 Hz` with `make_dd_mhe_pair`, because that sample time differs from the linear example. Initialize the submodule before that script:
 
 ```bash
 git submodule update --init quadrotor/safe-control-gym
+python -m quadrotor.fly_quadrotor_gym
 ```
 
-### 1. IEEE 14-bus power system
+### 2. IEEE 14-bus power system
 
-`power/explore_ieee14.py` estimates the generator angle and speed deviations of the linearized IEEE 14-bus plant (`n = 10`, `p = 19`, `m = 19`, sample time `0.01 s`, horizon `L = 6`). The discrete matrices in `power/ieee14/` come from [Moving-horizon-FDIA](https://github.com/ZYblend/Moving-horizon-FDIA) (`demo_14_bus_system`). Offline data are one persistently exciting rollout of that linear model. Online, scaled measurements have noise `N(0, 0.1^2)`. From `t = 1.5 s`, a constant bias of `40` scaled units is added to the first `k` bus power-injection sensors (measurement channels 5 through 9).
+The online script estimates generator angle and speed deviations of the linearized IEEE 14-bus plant (`n = 10`, `p = 19`, `m = 19`, sample time `0.01 s`, horizon `L = 6`). The discrete matrices in `power/ieee14/` come from [Moving-horizon-FDIA](https://github.com/ZYblend/Moving-horizon-FDIA) (`demo_14_bus_system`).
+
+`power/prepare_ieee14.py` rolls out one persistently exciting trajectory, checks the Hankel rank, and writes `power/offline/ieee14_hankel.npz`. The input Hankel matrix of order `L + n = 16` has rank 304 / 304. Online, scaled measurements have noise `N(0, 0.1^2)`. From `t = 1.5 s`, a constant bias of `40` scaled units is added to the first `k` bus power-injection sensors (measurement channels 5 through 9).
 
 ```bash
-python power/explore_ieee14.py
+python power/prepare_ieee14.py
+python power/simulate_ieee14.py
 ```
 
 State RMSE is the root-mean-square, over the run, of the Euclidean state error. Saved in `power/ieee14_results.json`:
@@ -37,41 +122,10 @@ The figure below is the `k = 3` run: three bus power-injection biases from `t = 
 
 ![IEEE 14-bus estimates with three biased sensors](power/ieee14_mhe.png)
 
-### 2. Planar quadrotor
+## Layout
 
-The plant is the safe-control-gym two-dimensional Crazyflie, linearized at hover. States are deviations `[x, x_dot, z, z_dot, theta, theta_dot]`. Outputs are horizontal position, altitude, pitch, pitch rate, and the vertical specific force at the center of mass. The sample time is `0.02 s` and the horizon is `L = 20`. Scaled sensor noise is `N(0, 0.1^2)`.
-
-`quadrotor/simulate_quadrotor.py` closes the loop around each data-driven estimator. The reference is one figure-8 in the vertical plane,
-
-```text
-x = 0.45 sin(ω t) m,    z = 0.22 sin(2 ω t) m,    ω = 2π / 8 s,
-```
-
-flown for `12 s`. An `8 rad/s` pitch-rate bias starts at `t = 4 s`, at the center crossing of the loop.
-
-```bash
-python -m quadrotor.simulate_quadrotor
-```
-
-Tracking RMSE against that reference, from `quadrotor/quadrotor_results.json`:
-
-| Interval | Channel | Robust DD-MHE | Resilient DD-MHE |
-| --- | --- | ---: | ---: |
-| Before the bias | `x` (m) | 0.016 | 0.016 |
-| Before the bias | `z` (m) | 0.009 | 0.009 |
-| After the bias | `x` (m) | 0.360 | 0.009 |
-| After the bias | `z` (m) | 0.006 | 0.006 |
-
-Before the bias the two flights match. After the bias, Robust DD-MHE leaves the figure-8 in `x` (RMSE `0.36 m`) while Resilient DD-MHE stays on the reference (`0.009 m`). Altitude tracking stays near `6 mm` for both.
-
-![Figure-8 tracking after the gyro bias](quadrotor/quadrotor_figure8.png)
-
-The same two flights, side by side. The label switches to "gyro bias on" at `t = 4 s`.
-
-![Figure-8 flight comparison](quadrotor/quadrotor_figure8.gif)
-
-`quadrotor/fly_quadrotor_gym.py` repeats this figure-8 on the nonlinear Crazyflie and replaces the gif with the PyBullet camera view:
-
-```bash
-python -m quadrotor.fly_quadrotor_gym
-```
+| Path | Contents |
+| --- | --- |
+| `ddmhe/` | Hankel construction, the rank check, and `make_dd_mhe` / `make_dd_mhe_pair` |
+| `quadrotor/` | Figure-8 flight. Prepare with `prepare_offline.py`, then run `simulate_quadrotor.py` |
+| `power/` | IEEE 14-bus attack sweep. Prepare with `prepare_ieee14.py`, then run `simulate_ieee14.py` |
