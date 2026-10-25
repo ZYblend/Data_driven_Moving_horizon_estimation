@@ -2,6 +2,15 @@
 
 Python examples of data-driven moving horizon estimation (DD-MHE). The shared library is `ddmhe`. Two applications compare **Robust DD-MHE** with the proposed **Resilient DD-MHE** when a sensor is biased: a planar quadrotor on a figure-8, and the IEEE 14-bus system.
 
+```
+@article{brunke2021safe,
+         title={Resilient Data-driven Moving-Horizon Estimation against Adversarial Attacks},
+         author={Yu Zheng, olugbenga Moses Anubi},
+         journal = {},
+         year={2027},
+         url = {}}
+```
+
 ## Setup
 
 The repository does not commit a virtual environment. Create one with Python 3.11 or newer (the pinned stack below was run on Python 3.13), then install `requirements.txt`. That file covers `ddmhe`, the IEEE 14-bus example, and the linear figure-8.
