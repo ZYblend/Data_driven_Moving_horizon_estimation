@@ -1,0 +1,3 @@
+[submodule "quadrotor/safe-control-gym"]
+	path = quadrotor/safe-control-gym
+	url = https://github.com/learnsyslab/safe-control-gym.git
